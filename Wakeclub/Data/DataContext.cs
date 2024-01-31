@@ -16,6 +16,7 @@ public class DataContext : IdentityDbContext
     public DbSet<Transaction> Transactions { get; set; }
     public DbSet<WakeClubPool> WakeClubPools { get; set; }
     public DbSet<Wallet> Wallets { get; set; }
+    public DbSet<BankDetails> BankDetails { get; set; }
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -24,6 +25,7 @@ public class DataContext : IdentityDbContext
             .HasOne(e => e.LatestWakeUp)
             .WithOne(e => e.User)
             .HasForeignKey<WakeUp>(e => e.UserId);
+        
         modelBuilder.Entity<WakeUp>()
             .HasOne(e => e.User)
             .WithOne(e => e.LatestWakeUp)
