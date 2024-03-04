@@ -6,7 +6,6 @@ public class Wallet : BaseEntity
 {
     public decimal Amount { get; set; }
     public int Withdrawable { get; set; } = 0;
-
     public Wallet() : base()
     {
         this.Amount = GlobalConstants.freePoints;

@@ -1,13 +1,32 @@
+using Identity.Entity;
+using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
+using Serilog;
 using Swashbuckle.AspNetCore.Filters;
+using Wakeclub.Controllers;
 using Wakeclub.Data;
-using Wakeclub.Entities;
 using Wakeclub.MailKit;
 using Wakeclub.Middleware;
+using Wakeclub.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// add logger
+builder.Host.UseSerilog((context, configuration) =>
+    configuration.ReadFrom.Configuration(context.Configuration));
+
+builder.Services.AddHttpLogging(logging =>
+{
+    // Customize HTTP logging here.
+    logging.LoggingFields = HttpLoggingFields.All;
+    logging.RequestHeaders.Add("sec-ch-ua");
+    logging.ResponseHeaders.Add("my-response-header");
+    logging.MediaTypeOptions.AddText("application/javascript");
+    logging.RequestBodyLogLimit = 4096;
+    logging.ResponseBodyLogLimit = 4096;
+});
 
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -24,10 +43,6 @@ builder.Services.AddSwaggerGen(options =>
     options.OperationFilter<SecurityRequirementsOperationFilter>();
 });
 
-// builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
-//     .AddIdentityCookies();
-// builder.Services.AddAuthorizationBuilder();
-
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<DataContext>(
     options => options
@@ -39,10 +54,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddIdentityApiEndpoints<User>()
     .AddEntityFrameworkStores<DataContext>();
 
-// Email Services
-// builder.Services.AddFluentEmail(builder.Configuration);
-// builder.Services.AddTransient<IEmailService, EmailService>();
-// builder.Services.AddTransient<IEmailSender, EmailSender>();
+// Email Service
 builder.Services.AddTransient<IEmailSender, MailKitEmailSender>();
 builder.Services.Configure<MailKitEmailSenderOptions>(options =>
 {
@@ -55,10 +67,17 @@ builder.Services.Configure<MailKitEmailSenderOptions>(options =>
 });
 
 // Error Handling
-builder.Services.AddExceptionHandler<AppExceptionHandler>();
-builder.Services.AddExceptionHandler<GeneralExceptionHandler>();
+builder.Services.AddExceptionHandler<ExceptionLoggingHandler>();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+
+// Http Client
+builder.Services.AddHttpClient<WalletController>();
+
+builder.Services.AddSingleton<IPaynowDepositService, HitpayPaynowDepositService>();
 
 builder.Services.AddControllers();
+
+builder.Services.AddRouting(options => options.LowercaseUrls = true);
 
 var app = builder.Build();
 
@@ -69,12 +88,16 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseSerilogRequestLogging();
+
+app.UseMiddleware<LoggingMiddleware>();
+
 app.UseExceptionHandler(_ => { });
 
 app.UseHttpsRedirection();
 
-app.MapControllers();
+app.MapGroup("/api/v1/identity").MapIdentityApi<User>();
 
-app.MapGroup("/auth").MapIdentityApi<User>();
+app.MapControllers();
 
 app.Run();
